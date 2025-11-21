@@ -1,0 +1,175 @@
+blueprint:
+  name: Battery SoC Manager
+  description: |
+    Automatisering om de laad/ontlaadmodus van een batterij te sturen op basis van de State of Charge (SoC).
+    Schakelt een indicatielampje en respecteert een hoofdschakelaar om de automatisering in/uit te schakelen.
+  domain: automation
+
+  input:
+    battery_soc:
+      name: Batterij SoC Sensor
+      description: De sensor die de State of Charge (SoC) van de batterij in % weergeeft.
+      selector:
+        entity:
+          domain: sensor
+          device_class: battery
+
+    battery_mode:
+      name: Batterij Modus Selector
+      description: De 'input_select' entiteit om de modus van de batterij te sturen.
+      selector:
+        entity:
+          domain: input_select
+
+    status_light:
+      name: Status Lamp
+      description: Het licht dat wordt in- of uitgeschakeld.
+      selector:
+        entity:
+          domain: light
+
+    master_switch:
+      name: Hoofdschakelaar
+      description: De 'input_boolean' die deze automatisering aan- of uitzet.
+      selector:
+        entity:
+          domain: input_boolean
+
+    low_soc_threshold:
+      name: Lage SoC Drempel (%)
+      description: Onder dit percentage wordt het laadproces gestart.
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+
+    high_soc_threshold:
+      name: Hoge SoC Drempel (%)
+      description: Boven dit percentage wordt het ontlaadproces gestart.
+      default: 90
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+
+    delay_low_soc_1:
+      name: Wachttijd 1 (Laag SoC)
+      description: Wachttijd (in seconden) tussen 'Pauze' en 'Licht aan'.
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: "s"
+
+    delay_low_soc_2:
+      name: Wachttijd 2 (Laag SoC)
+      description: Wachttijd (in seconden) tussen 'Licht aan' en 'Laden'.
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: "s"
+
+    delay_high_soc_1:
+      name: Wachttijd 3 (Hoog SoC)
+      description: Wachttijd (in seconden) tussen 'Pauze' en 'Licht uit'.
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: "s"
+
+    delay_high_soc_2:
+      name: Wachttijd 4 (Hoog SoC)
+      description: Wachttijd (in seconden) tussen 'Licht uit' en 'Ontladen'.
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: "s"
+
+mode: restart
+
+trigger:
+  - platform: state
+    entity_id: !input battery_soc
+  - platform: state
+    entity_id: !input master_switch
+
+action:
+  - choose:
+      # SCENARIO 1: Master switch is turned OFF.
+      - conditions:
+          - condition: state
+            entity_id: !input master_switch
+            state: 'off'
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input battery_mode
+            data:
+              option: "Akku Automatisch"
+          - service: light.turn_off
+            target:
+              entity_id: !input status_light
+
+      # SCENARIO 2: SoC is BELOW the low threshold.
+      - conditions:
+          - condition: state
+            entity_id: !input master_switch
+            state: 'on'
+          - condition: numeric_state
+            entity_id: !input battery_soc
+            below: !input low_soc_threshold
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input battery_mode
+            data:
+              option: "Akku Pause"
+          - delay:
+              seconds: !input delay_low_soc_1
+          - service: light.turn_on
+            target:
+              entity_id: !input status_light
+          - delay:
+              seconds: !input delay_low_soc_2
+          - service: input_select.select_option
+            target:
+              entity_id: !input battery_mode
+            data:
+              option: "Akku schnell Laden"
+
+      # SCENARIO 3: SoC is ABOVE the high threshold.
+      - conditions:
+          - condition: state
+            entity_id: !input master_switch
+            state: 'on'
+          - condition: numeric_state
+            entity_id: !input battery_soc
+            above: !input high_soc_threshold
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input battery_mode
+            data:
+              option: "Akku Pause"
+          - delay:
+              seconds: !input delay_high_soc_1
+          - service: light.turn_off
+            target:
+              entity_id: !input status_light
+          - delay:
+              seconds: !input delay_high_soc_2
+          - service: input_select.select_option
+            target:
+              entity_id: !input battery_mode
+            data:
+              option: "Akku schnell Entladen"
