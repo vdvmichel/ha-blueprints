@@ -120,14 +120,13 @@ action:
             target:
               entity_id: !input status_light
 
-      # SCENARIO 2: SoC is BELOW the low threshold.
+      # SCENARIO 2: SoC is AT or BELOW the low threshold.
       - conditions:
           - condition: state
             entity_id: !input master_switch
             state: 'on'
-          - condition: numeric_state
-            entity_id: !input battery_soc
-            below: !input low_soc_threshold
+          - condition: template
+            value_template: "{{ states(!input battery_soc) | float(0) <= !input low_soc_threshold }}"
         sequence:
           - service: input_select.select_option
             target:
@@ -147,14 +146,13 @@ action:
             data:
               option: "Akku schnell Laden"
 
-      # SCENARIO 3: SoC is ABOVE the high threshold.
+      # SCENARIO 3: SoC is AT or ABOVE the high threshold.
       - conditions:
           - condition: state
             entity_id: !input master_switch
             state: 'on'
-          - condition: numeric_state
-            entity_id: !input battery_soc
-            above: !input high_soc_threshold
+          - condition: template
+            value_template: "{{ states(!input battery_soc) | float(0) >= !input high_soc_threshold }}"
         sequence:
           - service: input_select.select_option
             target:
